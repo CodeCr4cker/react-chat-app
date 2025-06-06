@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   initializeApp
 } from "firebase/app";
@@ -34,9 +34,12 @@ import {
   EmailAuthProvider,
 } from "firebase/auth";
 
-import {  ref, uploadBytes, doc, updateDoc, serverTimestamp, getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { toast } from "react-toastify"; // optional, use if you're showing toast notifications
-
+import { 
+  getStorage, 
+  ref, 
+  uploadBytes, 
+  getDownloadURL 
+} from "firebase/storage";
 
 // --------- Firebase Config and Initialization ---------
 const firebaseConfig = {
@@ -61,10 +64,11 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
+  const [profilePhotoURL, setProfilePhotoURL] = useState(null);
 
   // Friend system
-  const [friendRequests, setFriendRequests] = useState([]); // Incoming friend requests
-  const [friends, setFriends] = useState([]); // Accepted friends list
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [friends, setFriends] = useState([]);
   const [blockedUsers, setBlockedUsers] = useState([]);
 
   // Chat
@@ -75,27 +79,17 @@ export default function App() {
   // Typing indicators
   const [typingStatus, setTypingStatus] = useState({});
 
-  // Profile photo
- /* const [profilePhotoURL, setProfilePhotoURL] = useState(null);
-  const [photoFile, setPhotoFile] = useState(null);
-*/
-  const [user, setUser] = useState(null);
+  // Profile photo upload
   const [photoFile, setPhotoFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+
   // Password change
   const [newPassword, setNewPassword] = useState("");
   const [reauthPassword, setReauthPassword] = useState("");
 
   // Online status tracking
   const [onlineUsers, setOnlineUsers] = useState([]);
-
-  // Group chats (simplified example)
-  const [groups, setGroups] = useState([]);
-  const [currentGroup, setCurrentGroup] = useState(null);
-  const [groupMessages, setGroupMessages] = useState([]);
-  const [newGroupMessage, setNewGroupMessage] = useState("");
 
   // Handle file selection and preview
   function handlePhotoChange(e) {
@@ -117,18 +111,20 @@ export default function App() {
         subscribeFriends(currentUser.uid);
         subscribeBlockedUsers(currentUser.uid);
         subscribeOnlineStatus(currentUser.uid);
+        setOnlineStatus(currentUser.uid, true);
       } else {
         setFriendRequests([]);
         setFriends([]);
         setBlockedUsers([]);
         setMessages([]);
         setCurrentChatFriend(null);
+        setProfilePhotoURL(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Load initial user data (profile photo, etc.)
+  // Load initial user data
   async function loadUserData(uid) {
     try {
       const docSnap = await getDoc(doc(db, "users", uid));
@@ -173,23 +169,13 @@ export default function App() {
 
   // ----------- Logout -----------
   async function handleLogout() {
+    if (user) {
+      await setOnlineStatus(user.uid, false);
+    }
     await signOut(auth);
   }
 
   // ----------- Upload Profile Photo -----------
-/*  async function handlePhotoUpload() {
-    if (!photoFile || !user) return;
-    try {
-      const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
-      await uploadBytes(photoRef, photoFile);
-      const url = await getDownloadURL(photoRef);
-      setProfilePhotoURL(url);
-      await updateDoc(doc(db, "users", user.uid), { profilePhotoURL: url });
-    } catch (err) {
-      setError(err.message);
-    }
-  } */
-  // Upload photo and save URL to Firestore
   async function handleUpload() {
     setError("");
     if (!photoFile) {
@@ -206,8 +192,8 @@ export default function App() {
       await uploadBytes(photoRef, photoFile);
       const url = await getDownloadURL(photoRef);
 
-      // Update Firestore user document (creates if not exist)
       await updateDoc(doc(db, "users", user.uid), { profilePhotoURL: url });
+      setProfilePhotoURL(url);
 
       alert("Profile photo uploaded successfully!");
       setPhotoFile(null);
@@ -218,14 +204,10 @@ export default function App() {
     setUploading(false);
   }
 
-  
   // ----------- Friend Requests System -----------
-
-  // Send friend request by username
   async function sendFriendRequest(toUsername) {
     if (!user) return;
     try {
-      // Get user by username
       const q = query(collection(db, "users"), where("username", "==", toUsername));
       const querySnap = await getDocs(q);
       if (querySnap.empty) {
@@ -240,7 +222,6 @@ export default function App() {
         return;
       }
 
-      // Check if already friends or blocked
       const fromUserDoc = await getDoc(doc(db, "users", user.uid));
       const fromUserData = fromUserDoc.data();
       if (fromUserData.friends?.includes(toUserId)) {
@@ -252,13 +233,13 @@ export default function App() {
         return;
       }
 
-      // Add a friend request doc
       await addDoc(collection(db, "friendRequests"), {
         from: user.uid,
         to: toUserId,
         status: "pending",
         createdAt: serverTimestamp(),
       });
+      setError(""); // Clear error on success
     } catch (err) {
       setError(err.message);
     }
@@ -278,7 +259,6 @@ export default function App() {
 
   // Listen to accepted friends
   function subscribeFriends(uid) {
-    const q = query(collection(db, "users"), where("__name__", "==", uid));
     return onSnapshot(doc(db, "users", uid), (docSnap) => {
       if (docSnap.exists()) {
         setFriends(docSnap.data().friends || []);
@@ -299,20 +279,16 @@ export default function App() {
   async function acceptFriendRequest(requestId, fromUserId) {
     if (!user) return;
     try {
-      // Update request status
       const reqRef = doc(db, "friendRequests", requestId);
       await updateDoc(reqRef, { status: "accepted" });
 
-      // Add each other as friends
       const userRef = doc(db, "users", user.uid);
       const fromUserRef = doc(db, "users", fromUserId);
 
       await updateDoc(userRef, { friends: arrayUnion(fromUserId) });
       await updateDoc(fromUserRef, { friends: arrayUnion(user.uid) });
 
-      // Open chat automatically
       setCurrentChatFriend({ uid: fromUserId });
-
     } catch (err) {
       setError(err.message);
     }
@@ -326,11 +302,10 @@ export default function App() {
         blockedUsers: arrayUnion(userIdToBlock),
         friends: arrayRemove(userIdToBlock),
       });
-      // Optionally remove friend from their list too
       await updateDoc(doc(db, "users", userIdToBlock), {
         friends: arrayRemove(user.uid),
       });
-      // Remove friend requests if any
+      
       const q = query(
         collection(db, "friendRequests"),
         where("from", "in", [user.uid, userIdToBlock]),
@@ -358,8 +333,6 @@ export default function App() {
   }
 
   // ----------- Chat System -----------
-
-  // Subscribe to messages with current friend
   useEffect(() => {
     if (!user || !currentChatFriend) {
       setMessages([]);
@@ -380,7 +353,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user, currentChatFriend]);
 
-  // Send a message to current friend
   async function sendMessage() {
     if (!newMessage.trim() || !currentChatFriend || !user) return;
 
@@ -396,14 +368,11 @@ export default function App() {
     setNewMessage("");
   }
 
-  // Generate consistent chatId from two user IDs
   function generateChatId(uid1, uid2) {
     return uid1 < uid2 ? uid1 + "_" + uid2 : uid2 + "_" + uid1;
   }
 
   // ----------- Typing Indicators -----------
-
-  // Update typing status in Firestore
   const typingTimeoutRef = useRef(null);
 
   async function handleTyping(e) {
@@ -413,19 +382,29 @@ export default function App() {
     const chatId = generateChatId(user.uid, currentChatFriend.uid);
     const typingRef = doc(db, "chats", chatId);
 
-    await updateDoc(typingRef, {
-      [`typing.${user.uid}`]: true,
-    });
+    try {
+      await updateDoc(typingRef, {
+        [`typing.${user.uid}`]: true,
+      });
+    } catch (err) {
+      // Create document if it doesn't exist
+      await setDoc(typingRef, {
+        typing: { [user.uid]: true }
+      }, { merge: true });
+    }
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(async () => {
-      await updateDoc(typingRef, {
-        [`typing.${user.uid}`]: false,
-      });
+      try {
+        await updateDoc(typingRef, {
+          [`typing.${user.uid}`]: false,
+        });
+      } catch (err) {
+        console.error("Error updating typing status:", err);
+      }
     }, 3000);
   }
 
-  // Listen to typing status
   useEffect(() => {
     if (!user || !currentChatFriend) {
       setTypingStatus({});
@@ -446,41 +425,33 @@ export default function App() {
   }, [user, currentChatFriend]);
 
   // ----------- Online Status -----------
+  async function setOnlineStatus(uid, isOnline) {
+    try {
+      const userStatusRef = doc(db, "status", uid);
+      await setDoc(userStatusRef, {
+        state: isOnline ? "online" : "offline",
+        lastChanged: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Error updating online status:", err);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
-    const userStatusRef = doc(db, "status", user.uid);
 
-    // Mark user as online on connect
-    const setOnline = async () => {
-      await setDoc(userStatusRef, {
-        state: "online",
-        lastChanged: serverTimestamp(),
-      });
-    };
-
-    setOnline();
-
-    // Mark offline on unload
-    const handleBeforeUnload = async () => {
-      await setDoc(userStatusRef, {
-        state: "offline",
-        lastChanged: serverTimestamp(),
-      });
+    const handleBeforeUnload = () => {
+      setOnlineStatus(user.uid, false);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      setDoc(userStatusRef, {
-        state: "offline",
-        lastChanged: serverTimestamp(),
-      });
+      setOnlineStatus(user.uid, false);
     };
   }, [user]);
 
-  // Listen to online users
   function subscribeOnlineStatus(uid) {
     const statusRef = collection(db, "status");
     return onSnapshot(statusRef, (querySnapshot) => {
@@ -495,7 +466,6 @@ export default function App() {
   }
 
   // ----------- Password Change -----------
-
   async function changePassword() {
     if (!user) {
       setError("No user signed in");
@@ -512,13 +482,13 @@ export default function App() {
       alert("Password updated!");
       setNewPassword("");
       setReauthPassword("");
+      setError("");
     } catch (err) {
       setError(err.message);
     }
   }
 
   // ----------- UI Rendering -----------
-
   if (loading) return <div>Loading...</div>;
 
   if (!user)
@@ -553,41 +523,6 @@ export default function App() {
         {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
     );
-//-----------profile photo-----------
-
-  return (
-    <div className="max-w-md mx-auto mt-8 p-4 border rounded shadow bg-white dark:bg-gray-900">
-      <h2 className="text-xl font-bold mb-4 text-center">Upload Profile Photo</h2>
-
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handlePhotoChange}
-        className="mb-4 w-full"
-      />
-
-      {preview && (
-        <div className="mb-4">
-          <img
-            src={preview}
-            alt="Preview"
-            className="w-32 h-32 object-cover rounded-full mx-auto border"
-          />
-        </div>
-      )}
-
-      <button
-        onClick={handleUpload}
-        disabled={uploading || !photoFile}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded disabled:opacity-50"
-      >
-        {uploading ? "Uploading..." : "Upload Photo"}
-      </button>
-    </div>
-  );
-}
-
-export default ProfileUploader;
 
   // If logged in show main UI
   return (
@@ -608,11 +543,19 @@ export default ProfileUploader;
           />
           <input
             type="file"
-            onChange={(e) => setPhotoFile(e.target.files[0])}
-            style={{ marginTop: 10 }}
+            accept="image/*"
+            onChange={handlePhotoChange}
+            style={{ marginTop: 10, display: "block" }}
           />
-          <button onClick={handlePhotoUpload} disabled={!photoFile}>
-            Upload Photo
+          {preview && (
+            <img
+              src={preview}
+              alt="Preview"
+              style={{ width: 50, height: 50, borderRadius: "50%", marginTop: 5 }}
+            />
+          )}
+          <button onClick={handleUpload} disabled={uploading || !photoFile} style={{ marginTop: 5 }}>
+            {uploading ? "Uploading..." : "Upload Photo"}
           </button>
         </div>
 
@@ -642,9 +585,7 @@ export default ProfileUploader;
           {friendRequests.length === 0 && <p>No new requests</p>}
           {friendRequests.map((req) => (
             <div key={req.id} style={{ marginBottom: 5, borderBottom: "1px solid #ddd" }}>
-              <p>
-                From: <strong>{req.from}</strong>
-              </p>
+              <p>From: <strong>{req.from}</strong></p>
               <button onClick={() => acceptFriendRequest(req.id, req.from)}>Accept</button>
             </div>
           ))}
@@ -669,18 +610,14 @@ export default ProfileUploader;
 
         {/* Add Friend */}
         <AddFriend sendFriendRequest={sendFriendRequest} />
+        
+        {error && <p style={{ color: "red", marginTop: 10 }}>{error}</p>}
       </div>
 
       {/* Main Chat Area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Chat Header */}
-        <div
-          style={{
-            padding: 10,
-            borderBottom: "1px solid #ccc",
-            backgroundColor: "#f5f5f5",
-          }}
-        >
+        <div style={{ padding: 10, borderBottom: "1px solid #ccc", backgroundColor: "#f5f5f5" }}>
           {currentChatFriend ? (
             <ChatFriendHeader friendId={currentChatFriend.uid} onlineUsers={onlineUsers} />
           ) : (
@@ -689,23 +626,13 @@ export default ProfileUploader;
         </div>
 
         {/* Chat Messages */}
-        <div
-          style={{
-            flex: 1,
-            padding: 10,
-            overflowY: "auto",
-            backgroundColor: "#eee",
-          }}
-        >
+        <div style={{ flex: 1, padding: 10, overflowY: "auto", backgroundColor: "#eee" }}>
           {messages.map((msg) => (
-            <MessageItem
-              key={msg.id}
-              message={msg}
-              currentUser={user.uid}
-            />
+            <MessageItem key={msg.id} message={msg} currentUser={user.uid} />
           ))}
-          {/* Typing indicator */}
-          {currentChatFriend && typingStatus[currentChatFriend.uid] && <p><em>Typing...</em></p>}
+          {currentChatFriend && typingStatus[currentChatFriend.uid] && (
+            <p><em>Typing...</em></p>
+          )}
         </div>
 
         {/* Chat Input */}
@@ -727,59 +654,32 @@ export default ProfileUploader;
   );
 }
 
-// Friend item component to fetch username and handle block/unblock and chat open
+// Friend item component
 function FriendItem({ friendId, currentUser, openChat, blockUser, unblockUser, blockedUsers }) {
-  const [username, setUsername] = useState("");
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [username, setUsername] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const userDoc = await getDoc(doc(getFirestore(), "users", friendId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUsername(data.username || friendId);
-          setProfilePhoto(data.profilePhotoURL || null);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    fetchData();
-  }, [friendId]);
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const userDoc = await getDoc(doc(db, "users", friendId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUsername(data.username || friendId);
+          setProfilePhoto(data.profilePhotoURL || null);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchData();
+  }, [friendId]);
 
-  const isBlocked = blockedUsers.includes(friendId);
+  const isBlocked = blockedUsers.includes(friendId);
 
-  return (
-    <div
-      onClick={() => {
-        if (isBlocked) {
-          unblockUser(friendId);
-        } else {
-          openChat(friendId);
-        }
-      }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        marginBottom: 5,
-        cursor: "pointer",
-        opacity: isBlocked ? 0.5 : 1,
-      }}
-    >
-      <img
-        src={profilePhoto || "https://via.placeholder.com/40"}
-        alt={username}
-        style={{ width: 40, height: 40, borderRadius: "50%", marginRight: 10 }}
-      />
-      <span>{username}</span>
-      {isBlocked && (
-        <span style={{ marginLeft: "auto", color: "red", fontSize: 12 }}>
-          (Blocked)
-        </span>
-      )}
-    </div>
-  );
-}
-
-export default FriendItem;
+  return (
+    <div style={{ display: "flex", alignItems: "center", marginBottom: 5, cursor: "pointer", opacity: isBlocked ? 0.5 : 1 }}>
+      <img
+        src={profilePhoto || "https://via.placeholder.com/40"}
+        alt={username}
+       
