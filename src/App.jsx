@@ -45,7 +45,6 @@ export default function App() {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Use app so eslint won't warn unused
   useEffect(() => {
     console.log("Firebase app instance:", app);
   }, []);
@@ -99,7 +98,7 @@ export default function App() {
       collection(db, "friends"),
       (snapshot) => {
         const userFriends = snapshot.docs
-          .map((doc) => doc.data())
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
           .filter((f) => f.users.includes(user.uid));
         setFriends(userFriends);
       }
@@ -121,10 +120,6 @@ export default function App() {
       unsubscribeBlocked();
     };
   }, [user]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -159,6 +154,18 @@ export default function App() {
       });
     };
   }, [chatId, blockedUsers, friendUser, friendsBlockedByFriend]);
+
+  useEffect(() => {
+    if (!user || !friends.length) return;
+
+    const newFriendUid = friends
+      .map((f) => f.users.find((uid) => uid !== user.uid))
+      .find((uid) => uid && (!friendUser || friendUser.uid !== uid));
+
+    if (newFriendUid) {
+      startChatWithFriend(newFriendUid);
+    }
+  }, [friends]);
 
   function getChatId(userA, userB) {
     return [userA, userB].sort().join("_");
@@ -233,7 +240,6 @@ export default function App() {
     setFriendNotFound(false);
   }
 
-  // Start chat by setting friendUser and chatId
   async function startChatWithFriend(friendUid) {
     if (!user) return;
 
@@ -315,6 +321,10 @@ export default function App() {
       alert("Error unblocking user: " + err.message);
     }
   }
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   if (loadingAuth) return <p>Loading...</p>;
 
@@ -433,15 +443,13 @@ export default function App() {
           <ul>
             {friends.map((f) => {
               const friendUid = f.users.find((uid) => uid !== user.uid);
-              const friendData = friends.find(fd => fd.uid === friendUid); // might be undefined
               return (
                 <li key={friendUid}>
-                  {/* Clicking friend name starts chat */}
                   <b
                     style={{ cursor: "pointer", color: "blue" }}
                     onClick={() => startChatWithFriend(friendUid)}
                   >
-                    {friendData?.username || friendUid}
+                    {friendUid}
                   </b>{" "}
                   <button onClick={() => blockUser(friendUid)}>Block</button>
                 </li>
