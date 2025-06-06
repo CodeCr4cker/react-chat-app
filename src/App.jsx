@@ -1,5 +1,30 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
+  initializeApp
+} from "firebase/app";
+
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  addDoc,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  serverTimestamp,
+  orderBy,
+  limit,
+  setDoc,
+  getDoc,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore";
+
+import {
+  getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -8,519 +33,654 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
 } from "firebase/auth";
-import {
-  collection,
-  query,
-  where,
-  addDoc,
-  doc,
-  setDoc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  serverTimestamp,
-  updateDoc,
-  getDocs,
-} from "firebase/firestore";
-import app, { auth, db } from "./firebase";
+
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+// --------- Firebase Config and Initialization ---------
+const firebaseConfig = {
+  apiKey: "AIzaSyBFBtuIw0HVJl-HYZ9DSP1VZqwXMJli_W8",
+  authDomain: "darknet-chat-f6b5a.firebaseapp.com",
+  projectId: "darknet-chat-f6b5a",
+  storageBucket: "darknet-chat-f6b5a.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdefg12345",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 export default function App() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-
+  // ====== States ======
   const [user, setUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [isLogin, setIsLogin] = useState(true);
-  const [friendUsernameInput, setFriendUsernameInput] = useState("");
-  const [friendUser, setFriendUser] = useState(null);
-  const [friendNotFound, setFriendNotFound] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatId, setChatId] = useState(null);
-  const [friendRequests, setFriendRequests] = useState([]);
-  const [friends, setFriends] = useState([]);
+  const [error, setError] = useState("");
+
+  // Friend system
+  const [friendRequests, setFriendRequests] = useState([]); // Incoming friend requests
+  const [friends, setFriends] = useState([]); // Accepted friends list
   const [blockedUsers, setBlockedUsers] = useState([]);
-  const messagesEndRef = useRef(null);
 
-  useEffect(() => {
-    console.log("Firebase app instance:", app);
-  }, []);
+  // Chat
+  const [currentChatFriend, setCurrentChatFriend] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
 
-  const friendsBlockedByFriend = useCallback(
-    async (friendUid) => {
-      if (!friendUid || !user) return false;
-      const q = query(
-        collection(db, "blocked"),
-        where("blockedBy", "==", friendUid),
-        where("blocked", "==", user.uid)
-      );
-      const querySnap = await getDocs(q);
-      return !querySnap.empty;
-    },
-    [user]
-  );
+  // Typing indicators
+  const [typingStatus, setTypingStatus] = useState({});
 
+  // Profile photo
+  const [profilePhotoURL, setProfilePhotoURL] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [reauthPassword, setReauthPassword] = useState("");
+
+  // Online status tracking
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
+  // Group chats (simplified example)
+  const [groups, setGroups] = useState([]);
+  const [currentGroup, setCurrentGroup] = useState(null);
+  const [groupMessages, setGroupMessages] = useState([]);
+  const [newGroupMessage, setNewGroupMessage] = useState("");
+
+  // ----------- Auth Listener -----------
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoadingAuth(false);
+      setUser(currentUser);
+      setLoading(false);
       if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          setUser({ uid: currentUser.uid, ...userDoc.data() });
-        } else {
-          signOut(auth);
-          setUser(null);
-        }
+        await loadUserData(currentUser.uid);
+        subscribeFriendRequests(currentUser.uid);
+        subscribeFriends(currentUser.uid);
+        subscribeBlockedUsers(currentUser.uid);
+        subscribeOnlineStatus(currentUser.uid);
       } else {
-        setUser(null);
+        setFriendRequests([]);
+        setFriends([]);
+        setBlockedUsers([]);
+        setMessages([]);
+        setCurrentChatFriend(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  // Load initial user data (profile photo, etc.)
+  async function loadUserData(uid) {
+    try {
+      const docSnap = await getDoc(doc(db, "users", uid));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.profilePhotoURL) setProfilePhotoURL(data.profilePhotoURL);
+      }
+    } catch (err) {
+      console.error("Error loading user data", err);
+    }
+  }
+
+  // ----------- Signup -----------
+  async function handleSignup() {
+    try {
+      setError("");
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const currentUser = userCredential.user;
+
+      // Create user profile document with username
+      await setDoc(doc(db, "users", currentUser.uid), {
+        username,
+        profilePhotoURL: null,
+        friends: [],
+        blockedUsers: [],
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // ----------- Login -----------
+  async function handleLogin() {
+    try {
+      setError("");
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // ----------- Logout -----------
+  async function handleLogout() {
+    await signOut(auth);
+  }
+
+  // ----------- Upload Profile Photo -----------
+  async function handlePhotoUpload() {
+    if (!photoFile || !user) return;
+    try {
+      const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
+      await uploadBytes(photoRef, photoFile);
+      const url = await getDownloadURL(photoRef);
+      setProfilePhotoURL(url);
+      await updateDoc(doc(db, "users", user.uid), { profilePhotoURL: url });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // ----------- Friend Requests System -----------
+
+  // Send friend request by username
+  async function sendFriendRequest(toUsername) {
+    if (!user) return;
+    try {
+      // Get user by username
+      const q = query(collection(db, "users"), where("username", "==", toUsername));
+      const querySnap = await getDocs(q);
+      if (querySnap.empty) {
+        setError("User not found");
+        return;
+      }
+      const toUserDoc = querySnap.docs[0];
+      const toUserId = toUserDoc.id;
+
+      if (toUserId === user.uid) {
+        setError("Cannot add yourself");
+        return;
+      }
+
+      // Check if already friends or blocked
+      const fromUserDoc = await getDoc(doc(db, "users", user.uid));
+      const fromUserData = fromUserDoc.data();
+      if (fromUserData.friends?.includes(toUserId)) {
+        setError("Already friends");
+        return;
+      }
+      if (fromUserData.blockedUsers?.includes(toUserId)) {
+        setError("User is blocked");
+        return;
+      }
+
+      // Add a friend request doc
+      await addDoc(collection(db, "friendRequests"), {
+        from: user.uid,
+        to: toUserId,
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Listen to incoming friend requests
+  function subscribeFriendRequests(uid) {
+    const q = query(collection(db, "friendRequests"), where("to", "==", uid), where("status", "==", "pending"));
+    return onSnapshot(q, (querySnapshot) => {
+      const requests = [];
+      querySnapshot.forEach((doc) => {
+        requests.push({ id: doc.id, ...doc.data() });
+      });
+      setFriendRequests(requests);
+    });
+  }
+
+  // Listen to accepted friends
+  function subscribeFriends(uid) {
+    const q = query(collection(db, "users"), where("__name__", "==", uid));
+    return onSnapshot(doc(db, "users", uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setFriends(docSnap.data().friends || []);
+      }
+    });
+  }
+
+  // Listen to blocked users
+  function subscribeBlockedUsers(uid) {
+    return onSnapshot(doc(db, "users", uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setBlockedUsers(docSnap.data().blockedUsers || []);
+      }
+    });
+  }
+
+  // Accept friend request
+  async function acceptFriendRequest(requestId, fromUserId) {
+    if (!user) return;
+    try {
+      // Update request status
+      const reqRef = doc(db, "friendRequests", requestId);
+      await updateDoc(reqRef, { status: "accepted" });
+
+      // Add each other as friends
+      const userRef = doc(db, "users", user.uid);
+      const fromUserRef = doc(db, "users", fromUserId);
+
+      await updateDoc(userRef, { friends: arrayUnion(fromUserId) });
+      await updateDoc(fromUserRef, { friends: arrayUnion(user.uid) });
+
+      // Open chat automatically
+      setCurrentChatFriend({ uid: fromUserId });
+
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Block user
+  async function blockUser(userIdToBlock) {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        blockedUsers: arrayUnion(userIdToBlock),
+        friends: arrayRemove(userIdToBlock),
+      });
+      // Optionally remove friend from their list too
+      await updateDoc(doc(db, "users", userIdToBlock), {
+        friends: arrayRemove(user.uid),
+      });
+      // Remove friend requests if any
+      const q = query(
+        collection(db, "friendRequests"),
+        where("from", "in", [user.uid, userIdToBlock]),
+        where("to", "in", [user.uid, userIdToBlock])
+      );
+      const snaps = await getDocs(q);
+      for (const docSnap of snaps.docs) {
+        await deleteDoc(doc(db, "friendRequests", docSnap.id));
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Unblock user
+  async function unblockUser(userIdToUnblock) {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        blockedUsers: arrayRemove(userIdToUnblock),
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // ----------- Chat System -----------
+
+  // Subscribe to messages with current friend
+  useEffect(() => {
+    if (!user || !currentChatFriend) {
+      setMessages([]);
+      return;
+    }
+    const chatId = generateChatId(user.uid, currentChatFriend.uid);
+    const messagesRef = collection(db, "chats", chatId, "messages");
+    const q = query(messagesRef, orderBy("createdAt", "asc"), limit(100));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const msgs = [];
+      querySnapshot.forEach((doc) => {
+        msgs.push({ id: doc.id, ...doc.data() });
+      });
+      setMessages(msgs);
+    });
+
+    return () => unsubscribe();
+  }, [user, currentChatFriend]);
+
+  // Send a message to current friend
+  async function sendMessage() {
+    if (!newMessage.trim() || !currentChatFriend || !user) return;
+
+    const chatId = generateChatId(user.uid, currentChatFriend.uid);
+    const messagesRef = collection(db, "chats", chatId, "messages");
+
+    await addDoc(messagesRef, {
+      text: newMessage.trim(),
+      from: user.uid,
+      to: currentChatFriend.uid,
+      createdAt: serverTimestamp(),
+    });
+    setNewMessage("");
+  }
+
+  // Generate consistent chatId from two user IDs
+  function generateChatId(uid1, uid2) {
+    return uid1 < uid2 ? uid1 + "_" + uid2 : uid2 + "_" + uid1;
+  }
+
+  // ----------- Typing Indicators -----------
+
+  // Update typing status in Firestore
+  const typingTimeoutRef = useRef(null);
+
+  async function handleTyping(e) {
+    setNewMessage(e.target.value);
+    if (!user || !currentChatFriend) return;
+
+    const chatId = generateChatId(user.uid, currentChatFriend.uid);
+    const typingRef = doc(db, "chats", chatId);
+
+    await updateDoc(typingRef, {
+      [`typing.${user.uid}`]: true,
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(async () => {
+      await updateDoc(typingRef, {
+        [`typing.${user.uid}`]: false,
+      });
+    }, 3000);
+  }
+
+  // Listen to typing status
+  useEffect(() => {
+    if (!user || !currentChatFriend) {
+      setTypingStatus({});
+      return;
+    }
+    const chatId = generateChatId(user.uid, currentChatFriend.uid);
+    const typingDocRef = doc(db, "chats", chatId);
+
+    const unsubscribe = onSnapshot(typingDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setTypingStatus(docSnap.data().typing || {});
+      } else {
+        setTypingStatus({});
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user, currentChatFriend]);
+
+  // ----------- Online Status -----------
+
   useEffect(() => {
     if (!user) return;
+    const userStatusRef = doc(db, "status", user.uid);
 
-    const unsubscribeRequests = onSnapshot(
-      collection(db, "friendRequests"),
-      (snapshot) => {
-        const requests = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((req) => req.to === user.uid && req.status === "pending");
-        setFriendRequests(requests);
-      }
-    );
+    // Mark user as online on connect
+    const setOnline = async () => {
+      await setDoc(userStatusRef, {
+        state: "online",
+        lastChanged: serverTimestamp(),
+      });
+    };
 
-    const unsubscribeFriends = onSnapshot(
-      collection(db, "friends"),
-      (snapshot) => {
-        const userFriends = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((f) => f.users.includes(user.uid));
-        setFriends(userFriends);
-      }
-    );
+    setOnline();
 
-    const unsubscribeBlocked = onSnapshot(
-      collection(db, "blocked"),
-      (snapshot) => {
-        const blocked = snapshot.docs
-          .map((doc) => doc.data())
-          .filter((b) => b.blockedBy === user.uid);
-        setBlockedUsers(blocked.map((b) => b.blocked));
-      }
-    );
+    // Mark offline on unload
+    const handleBeforeUnload = async () => {
+      await setDoc(userStatusRef, {
+        state: "offline",
+        lastChanged: serverTimestamp(),
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      unsubscribeRequests();
-      unsubscribeFriends();
-      unsubscribeBlocked();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      setDoc(userStatusRef, {
+        state: "offline",
+        lastChanged: serverTimestamp(),
+      });
     };
   }, [user]);
 
-  useEffect(() => {
-    if (!chatId) return;
-
-    async function checkBlockedAndSubscribe() {
-      if (
-        blockedUsers.includes(friendUser?.uid) ||
-        (friendUser?.uid && (await friendsBlockedByFriend(friendUser.uid)))
-      ) {
-        setMessages([]);
-        return;
-      }
-
-      const messagesRef = collection(db, "chats", chatId, "messages");
-      const q = query(messagesRef, orderBy("createdAt"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const msgs = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setMessages(msgs);
+  // Listen to online users
+  function subscribeOnlineStatus(uid) {
+    const statusRef = collection(db, "status");
+    return onSnapshot(statusRef, (querySnapshot) => {
+      const online = [];
+      querySnapshot.forEach((doc) => {
+        if (doc.data().state === "online") {
+          online.push(doc.id);
+        }
       });
-
-      return unsubscribe;
-    }
-
-    let unsubscribePromise = checkBlockedAndSubscribe();
-
-    return () => {
-      unsubscribePromise.then((unsub) => {
-        if (typeof unsub === "function") unsub();
-      });
-    };
-  }, [chatId, blockedUsers, friendUser, friendsBlockedByFriend]);
-
-  useEffect(() => {
-    if (!user || !friends.length) return;
-
-    const newFriendUid = friends
-      .map((f) => f.users.find((uid) => uid !== user.uid))
-      .find((uid) => uid && (!friendUser || friendUser.uid !== uid));
-
-    if (newFriendUid) {
-      startChatWithFriend(newFriendUid);
-    }
-  }, [friends]);
-
-  function getChatId(userA, userB) {
-    return [userA, userB].sort().join("_");
+      setOnlineUsers(online);
+    });
   }
 
-  async function handleSignUp() {
-    if (!email || !password || !username) {
-      alert("Fill all fields");
-      return;
-    }
-
-    const usernameQuery = query(
-      collection(db, "users"),
-      where("username", "==", username)
-    );
-    const querySnapshot = await getDocs(usernameQuery);
-    if (!querySnapshot.empty) {
-      alert("Username already taken");
-      return;
-    }
-
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      await setDoc(doc(db, "users", userCredential.user.uid), {
-        username,
-        email,
-      });
-      alert("Sign up success! Please login now.");
-      setIsLogin(true);
-    } catch (err) {
-      alert("Error: " + err.message);
-    }
-  }
+  // ----------- Password Change -----------
 
   async function changePassword() {
-    if (!currentPassword || !newPassword) {
-      alert("Fill both password fields");
+    if (!user) {
+      setError("No user signed in");
       return;
     }
-
+    if (!newPassword) {
+      setError("Enter new password");
+      return;
+    }
     try {
-      const userCred = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(auth.currentUser, userCred);
-      await updatePassword(auth.currentUser, newPassword);
+      const credential = EmailAuthProvider.credential(user.email, reauthPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
       alert("Password updated!");
-      setCurrentPassword("");
       setNewPassword("");
+      setReauthPassword("");
     } catch (err) {
-      alert("Error updating password: " + err.message);
+      setError(err.message);
     }
   }
 
-  async function findFriend() {
-    if (!friendUsernameInput) return;
+  // ----------- UI Rendering -----------
 
-    const q = query(
-      collection(db, "users"),
-      where("username", "==", friendUsernameInput)
+  if (loading) return <div>Loading...</div>;
+
+  if (!user)
+    return (
+      <div style={{ padding: 20 }}>
+        <h2>Login or Signup</h2>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ display: "block", marginBottom: 10 }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ display: "block", marginBottom: 10 }}
+        />
+        <input
+          type="text"
+          placeholder="Username (signup only)"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          style={{ display: "block", marginBottom: 10 }}
+        />
+        <button onClick={handleLogin} style={{ marginRight: 10 }}>
+          Login
+        </button>
+        <button onClick={handleSignup}>Signup</button>
+        {error && <p style={{ color: "red" }}>{error}</p>}
+      </div>
     );
-    const querySnap = await getDocs(q);
-    if (querySnap.empty) {
-      setFriendUser(null);
-      setFriendNotFound(true);
-      return;
-    }
-    const friendDoc = querySnap.docs[0];
-    setFriendUser({ uid: friendDoc.id, ...friendDoc.data() });
-    setFriendNotFound(false);
-  }
 
-  async function startChatWithFriend(friendUid) {
-    if (!user) return;
-
-    try {
-      const userDoc = await getDoc(doc(db, "users", friendUid));
-      if (!userDoc.exists()) {
-        alert("Friend user data not found");
-        return;
-      }
-      const friendData = { uid: friendUid, ...userDoc.data() };
-      setFriendUser(friendData);
-      const id = getChatId(user.uid, friendUid);
-      setChatId(id);
-    } catch (err) {
-      alert("Error starting chat: " + err.message);
-    }
-  }
-
-  async function sendMessage() {
-    if (!chatInput.trim() || !chatId || !user) return;
-
-    const messagesRef = collection(db, "chats", chatId, "messages");
-    await addDoc(messagesRef, {
-      text: chatInput.trim(),
-      sender: user.uid,
-      createdAt: serverTimestamp(),
-    });
-    setChatInput("");
-  }
-
-  async function acceptRequest(reqId, fromUid) {
-    try {
-      await updateDoc(doc(db, "friendRequests", reqId), { status: "accepted" });
-      await setDoc(doc(db, "friends", [user.uid, fromUid].sort().join("_")), {
-        users: [user.uid, fromUid],
-      });
-      alert("Friend request accepted!");
-    } catch (err) {
-      alert("Error accepting friend request: " + err.message);
-    }
-  }
-
-  async function declineRequest(reqId) {
-    try {
-      await updateDoc(doc(db, "friendRequests", reqId), { status: "declined" });
-      alert("Friend request declined.");
-    } catch (err) {
-      alert("Error declining friend request: " + err.message);
-    }
-  }
-
-  async function blockUser(uidToBlock) {
-    if (!user) return;
-    try {
-      await addDoc(collection(db, "blocked"), {
-        blockedBy: user.uid,
-        blocked: uidToBlock,
-      });
-      alert("User blocked.");
-    } catch (err) {
-      alert("Error blocking user: " + err.message);
-    }
-  }
-
-  async function unblockUser(uidToUnblock) {
-    if (!user) return;
-    try {
-      const q = query(
-        collection(db, "blocked"),
-        where("blockedBy", "==", user.uid),
-        where("blocked", "==", uidToUnblock)
-      );
-      const querySnap = await getDocs(q);
-      querySnap.forEach(async (docu) => {
-        await updateDoc(doc(db, "blocked", docu.id), { deleted: true });
-      });
-      alert("User unblocked.");
-    } catch (err) {
-      alert("Error unblocking user: " + err.message);
-    }
-  }
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  if (loadingAuth) return <p>Loading...</p>;
-
+  // If logged in show main UI
   return (
-    <div style={{ padding: 20, maxWidth: 700, margin: "0 auto" }}>
-      {!user ? (
-        <>
-          <h2>{isLogin ? "Login" : "Sign Up"}</h2>
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <br />
-          <input
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <br />
-          {!isLogin && (
-            <>
-              <input
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <br />
-            </>
-          )}
-          <button onClick={isLogin ? () => signInWithEmailAndPassword(auth, email, password) : handleSignUp}>
-            {isLogin ? "Login" : "Sign Up"}
-          </button>
-          <p
-            onClick={() => setIsLogin(!isLogin)}
-            style={{ cursor: "pointer", color: "blue" }}
-          >
-            {isLogin ? "Create new account" : "Already have an account? Login"}
-          </p>
-        </>
-      ) : (
-        <>
-          <h2>Welcome, {user.username}!</h2>
-          <button onClick={() => signOut(auth)}>Logout</button>
+    <div style={{ display: "flex", height: "100vh", fontFamily: "Arial, sans-serif" }}>
+      {/* Sidebar - Friends, Requests, Profile */}
+      <div style={{ width: 300, borderRight: "1px solid #ccc", padding: 10, overflowY: "auto" }}>
+        <h3>Welcome, {user.email}</h3>
+        <button onClick={handleLogout} style={{ marginBottom: 10 }}>
+          Logout
+        </button>
 
-          <h3>Change Password</h3>
-          <input
-            placeholder="Current Password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+        {/* Profile Photo */}
+        <div style={{ marginBottom: 20 }}>
+          <img
+            src={profilePhotoURL || "https://via.placeholder.com/100"}
+            alt="Profile"
+            style={{ width: 100, height: 100, borderRadius: "50%" }}
           />
-          <br />
           <input
-            placeholder="New Password"
+            type="file"
+            onChange={(e) => setPhotoFile(e.target.files[0])}
+            style={{ marginTop: 10 }}
+          />
+          <button onClick={handlePhotoUpload} disabled={!photoFile}>
+            Upload Photo
+          </button>
+        </div>
+
+        {/* Password Change */}
+        <div style={{ marginBottom: 20 }}>
+          <h4>Change Password</h4>
+          <input
             type="password"
+            placeholder="Current Password"
+            value={reauthPassword}
+            onChange={(e) => setReauthPassword(e.target.value)}
+            style={{ display: "block", marginBottom: 5 }}
+          />
+          <input
+            type="password"
+            placeholder="New Password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+            style={{ display: "block", marginBottom: 5 }}
           />
-          <br />
-          <button onClick={changePassword}>Change Password</button>
+          <button onClick={changePassword}>Update Password</button>
+        </div>
 
-          <h3>Find Friend</h3>
-          <input
-            placeholder="Friend's username"
-            value={friendUsernameInput}
-            onChange={(e) => setFriendUsernameInput(e.target.value)}
-          />
-          <button onClick={findFriend}>Search</button>
-          {friendNotFound && <p>Friend not found</p>}
-          {friendUser && (
-            <div>
+        {/* Friend Requests */}
+        <div>
+          <h4>Friend Requests</h4>
+          {friendRequests.length === 0 && <p>No new requests</p>}
+          {friendRequests.map((req) => (
+            <div key={req.id} style={{ marginBottom: 5, borderBottom: "1px solid #ddd" }}>
               <p>
-                Username:{" "}
-                <b
-                  style={{ cursor: "pointer", color: "blue" }}
-                  onClick={() => startChatWithFriend(friendUser.uid)}
-                >
-                  {friendUser.username}
-                </b>
+                From: <strong>{req.from}</strong>
               </p>
-              {!friends.some((f) => f.users.includes(friendUser.uid)) && (
-                <button
-                  onClick={async () => {
-                    await addDoc(collection(db, "friendRequests"), {
-                      from: user.uid,
-                      to: friendUser.uid,
-                      status: "pending",
-                    });
-                    alert("Friend request sent.");
-                  }}
-                >
-                  Send Friend Request
-                </button>
-              )}
+              <button onClick={() => acceptFriendRequest(req.id, req.from)}>Accept</button>
             </div>
+          ))}
+        </div>
+
+        {/* Friends List */}
+        <div style={{ marginTop: 20 }}>
+          <h4>Your Friends</h4>
+          {friends.length === 0 && <p>No friends yet</p>}
+          {friends.map((friendId) => (
+            <FriendItem
+              key={friendId}
+              friendId={friendId}
+              currentUser={user}
+              openChat={setCurrentChatFriend}
+              blockUser={blockUser}
+              unblockUser={unblockUser}
+              blockedUsers={blockedUsers}
+            />
+          ))}
+        </div>
+
+        {/* Add Friend */}
+        <AddFriend sendFriendRequest={sendFriendRequest} />
+      </div>
+
+      {/* Main Chat Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Chat Header */}
+        <div
+          style={{
+            padding: 10,
+            borderBottom: "1px solid #ccc",
+            backgroundColor: "#f5f5f5",
+          }}
+        >
+          {currentChatFriend ? (
+            <ChatFriendHeader friendId={currentChatFriend.uid} onlineUsers={onlineUsers} />
+          ) : (
+            <p>Select a friend to chat</p>
           )}
+        </div>
 
-          <h3>Friend Requests</h3>
-          {friendRequests.length === 0 && <p>No pending friend requests.</p>}
-          <ul>
-            {friendRequests.map((req) => (
-              <li key={req.id}>
-                From: {req.from}{" "}
-                <button onClick={() => acceptRequest(req.id, req.from)}>
-                  Accept
-                </button>{" "}
-                <button onClick={() => declineRequest(req.id)}>Decline</button>
-              </li>
-            ))}
-          </ul>
+        {/* Chat Messages */}
+        <div
+          style={{
+            flex: 1,
+            padding: 10,
+            overflowY: "auto",
+            backgroundColor: "#eee",
+          }}
+        >
+          {messages.map((msg) => (
+            <MessageItem
+              key={msg.id}
+              message={msg}
+              currentUser={user.uid}
+            />
+          ))}
+          {/* Typing indicator */}
+          {currentChatFriend && typingStatus[currentChatFriend.uid] && <p><em>Typing...</em></p>}
+        </div>
 
-          <h3>Friends List</h3>
-          {friends.length === 0 && <p>No friends yet.</p>}
-          <ul>
-            {friends.map((f) => {
-              const friendUid = f.users.find((uid) => uid !== user.uid);
-              return (
-                <li key={friendUid}>
-                  <b
-                    style={{ cursor: "pointer", color: "blue" }}
-                    onClick={() => startChatWithFriend(friendUid)}
-                  >
-                    {friendUid}
-                  </b>{" "}
-                  <button onClick={() => blockUser(friendUid)}>Block</button>
-                </li>
-              );
-            })}
-          </ul>
-
-          {friendUser && chatId && (
-            <div style={{ marginTop: 20 }}>
-              <h3>Chatting with {friendUser.username}</h3>
-              <div
-                style={{
-                  border: "1px solid #ccc",
-                  height: 300,
-                  overflowY: "scroll",
-                  padding: 10,
-                  marginBottom: 10,
-                }}
-              >
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    style={{
-                      textAlign: msg.sender === user.uid ? "right" : "left",
-                      marginBottom: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor:
-                          msg.sender === user.uid ? "#dcf8c6" : "#fff",
-                        padding: 5,
-                        borderRadius: 5,
-                        display: "inline-block",
-                        maxWidth: "70%",
-                        wordWrap: "break-word",
-                      }}
-                    >
-                      {msg.text}
-                    </span>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-              <input
-                type="text"
-                value={chatInput}
-                placeholder="Type your message..."
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") sendMessage();
-                }}
-              />
-              <button onClick={sendMessage}>Send</button>
-            </div>
-          )}
-
-          <div style={{ marginTop: 20 }}>
-            <h3>Blocked Users</h3>
-            {blockedUsers.length === 0 && <p>No users blocked.</p>}
-            <ul>
-              {blockedUsers.map((blockedUid) => (
-                <li key={blockedUid}>
-                  UID: {blockedUid}{" "}
-                  <button onClick={() => unblockUser(blockedUid)}>Unblock</button>
-                </li>
-              ))}
-            </ul>
+        {/* Chat Input */}
+        {currentChatFriend && (
+          <div style={{ padding: 10, borderTop: "1px solid #ccc", backgroundColor: "#f5f5f5" }}>
+            <input
+              type="text"
+              value={newMessage}
+              onChange={handleTyping}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              placeholder="Type a message..."
+              style={{ width: "80%", marginRight: 10 }}
+            />
+            <button onClick={sendMessage}>Send</button>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
+
+// Friend item component to fetch username and handle block/unblock and chat open
+function FriendItem({ friendId, currentUser, openChat, blockUser, unblockUser, blockedUsers }) {
+  const [username, setUsername] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const userDoc = await getDoc(doc(getFirestore(), "users", friendId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUsername(data.username || friendId);
+          setProfilePhoto(data.profilePhotoURL || null);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchData();
+  }, [friendId]);
+
+  const isBlocked = blockedUsers.includes(friendId);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        marginBottom: 5,
+        cursor: "pointer",
+      }}
+    >
+      <img
+        src={profilePhoto || "https://via.placeholder.com/40"}
+        alt={username}
+        style={{ width: 40, height: 40, borderRadius: "50%", marginRight: 10 }}
+        onClick={() => !isBlocked &
