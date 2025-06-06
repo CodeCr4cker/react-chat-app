@@ -34,7 +34,9 @@ import {
   EmailAuthProvider,
 } from "firebase/auth";
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {  ref, uploadBytes, doc, updateDoc, serverTimestamp, getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { toast } from "react-toastify"; // optional, use if you're showing toast notifications
+
 
 // --------- Firebase Config and Initialization ---------
 const firebaseConfig = {
@@ -161,7 +163,7 @@ export default function App() {
   }
 
   // ----------- Upload Profile Photo -----------
-  async function handlePhotoUpload() {
+/*  async function handlePhotoUpload() {
     if (!photoFile || !user) return;
     try {
       const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
@@ -172,8 +174,43 @@ export default function App() {
     } catch (err) {
       setError(err.message);
     }
+  } */
+  
+async function handlePhotoUpload() {
+  if (!photoFile || !user) {
+    console.warn("Missing file or user");
+    return;
   }
 
+  try {
+    // Create a reference path based on UID
+    const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
+
+    // Upload the photo to Firebase Storage
+    await uploadBytes(photoRef, photoFile);
+
+    // Get the public download URL
+    const url = await getDownloadURL(photoRef);
+
+    // Update React state
+    setProfilePhotoURL(url);
+
+    // Update Firestore user document
+    await updateDoc(doc(db, "users", user.uid), {
+      profilePhotoURL: url,
+      photoUpdatedAt: serverTimestamp(), // optional field
+      status: "online", // update status if needed
+    });
+
+    // Optional: Show success message
+    toast.success("Profile photo updated!");
+
+  } catch (err) {
+    console.error("Photo upload error:", err);
+    setError(err.message);
+    toast.error("Failed to upload photo.");
+  }
+}
   // ----------- Friend Requests System -----------
 
   // Send friend request by username
