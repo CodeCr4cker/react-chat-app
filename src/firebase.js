@@ -16,21 +16,20 @@ const firebaseConfig = {
   measurementId: "G-2WL2PC8N6H",
 };
 
-// Initialize Firebase app
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 // Initialize services
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const rtdb = getDatabase(app);
 
-// Initialize Analytics only if supported (browser environment)
+// Initialize Analytics if supported
 isSupported().then((supported) => {
   if (supported) {
     getAnalytics(app);
   }
 });
 
-export default app;
-export const storage = getStorage(app);
-export const rtdb = getDatabase(app);
-export default app;
+export { app, auth, db, storage, rtdb };
