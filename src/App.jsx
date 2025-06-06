@@ -729,38 +729,57 @@ export default ProfileUploader;
 
 // Friend item component to fetch username and handle block/unblock and chat open
 function FriendItem({ friendId, currentUser, openChat, blockUser, unblockUser, blockedUsers }) {
-  const [username, setUsername] = useState("");
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [username, setUsername] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const userDoc = await getDoc(doc(getFirestore(), "users", friendId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUsername(data.username || friendId);
-          setProfilePhoto(data.profilePhotoURL || null);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    fetchData();
-  }, [friendId]);
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const userDoc = await getDoc(doc(getFirestore(), "users", friendId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUsername(data.username || friendId);
+          setProfilePhoto(data.profilePhotoURL || null);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchData();
+  }, [friendId]);
 
-  const isBlocked = blockedUsers.includes(friendId);
+  const isBlocked = blockedUsers.includes(friendId);
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        marginBottom: 5,
-        cursor: "pointer",
-      }}
-    >
-      <img
-        src={profilePhoto || "https://via.placeholder.com/40"}
-        alt={username}
-        style={{ width: 40, height: 40, borderRadius: "50%", marginRight: 10 }}
-        onClick={() => !isBlocked &
+  return (
+    <div
+      onClick={() => {
+        if (isBlocked) {
+          unblockUser(friendId);
+        } else {
+          openChat(friendId);
+        }
+      }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        marginBottom: 5,
+        cursor: "pointer",
+        opacity: isBlocked ? 0.5 : 1,
+      }}
+    >
+      <img
+        src={profilePhoto || "https://via.placeholder.com/40"}
+        alt={username}
+        style={{ width: 40, height: 40, borderRadius: "50%", marginRight: 10 }}
+      />
+      <span>{username}</span>
+      {isBlocked && (
+        <span style={{ marginLeft: "auto", color: "red", fontSize: 12 }}>
+          (Blocked)
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default FriendItem;
