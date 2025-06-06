@@ -306,6 +306,7 @@ export default function App() {
         friends: arrayRemove(user.uid),
       });
       
+      // Remove any friend requests between users
       const q = query(
         collection(db, "friendRequests"),
         where("from", "in", [user.uid, userIdToBlock]),
@@ -366,6 +367,17 @@ export default function App() {
       createdAt: serverTimestamp(),
     });
     setNewMessage("");
+  }
+
+  // Delete message
+  async function deleteMessage(messageId) {
+    if (!user || !currentChatFriend) return;
+    const chatId = generateChatId(user.uid, currentChatFriend.uid);
+    try {
+      await deleteDoc(doc(db, "chats", chatId, "messages", messageId));
+    } catch (err) {
+      setError("Failed to delete message: " + err.message);
+    }
   }
 
   function generateChatId(uid1, uid2) {
@@ -559,8 +571,43 @@ export default function App() {
           </button>
         </div>
 
-        {/* Password Change */}
+        {/* Friend Requests */}
         <div style={{ marginBottom: 20 }}>
+          <h4>Friend Requests</h4>
+          {friendRequests.length === 0 && <p>No requests</p>}
+          {friendRequests.map((req) => (
+            <FriendRequestItem
+              key={req.id}
+              request={req}
+              onAccept={() => acceptFriendRequest(req.id, req.from)}
+              onBlock={() => blockUser(req.from)}
+            />
+          ))}
+        </div>
+
+        {/* Friends List */}
+        <div style={{ marginBottom: 20 }}>
+          <h4>Friends</h4>
+          {friends.length === 0 && <p>No friends yet</p>}
+          {friends.map((friendId) => (
+            <FriendListItem
+              key={friendId}
+              friendId={friendId}
+              currentUserId={user.uid}
+              onSelect={() => setCurrentChatFriend({ uid: friendId })}
+              onBlock={() => blockUser(friendId)}
+              blocked={blockedUsers.includes(friendId)}
+              onUnblock={() => unblockUser(friendId)}
+              db={db}
+            />
+          ))}
+        </div>
+
+        {/* Add Friend */}
+        <AddFriendForm onSend={sendFriendRequest} />
+
+        {/* Password Change */}
+        <div style={{ marginTop: 20 }}>
           <h4>Change Password</h4>
           <input
             type="password"
@@ -576,110 +623,77 @@ export default function App() {
             onChange={(e) => setNewPassword(e.target.value)}
             style={{ display: "block", marginBottom: 5 }}
           />
-          <button onClick={changePassword}>Update Password</button>
+          <button onClick={changePassword}>Change Password</button>
         </div>
 
-        {/* Friend Requests */}
-        <div>
-          <h4>Friend Requests</h4>
-          {friendRequests.length === 0 && <p>No new requests</p>}
-          {friendRequests.map((req) => (
-            <div key={req.id} style={{ marginBottom: 5, borderBottom: "1px solid #ddd" }}>
-              <p>From: <strong>{req.from}</strong></p>
-              <button onClick={() => acceptFriendRequest(req.id, req.from)}>Accept</button>
-            </div>
-          ))}
-        </div>
-
-        {/* Friends List */}
-        <div style={{ marginTop: 20 }}>
-          <h4>Your Friends</h4>
-          {friends.length === 0 && <p>No friends yet</p>}
-          {friends.map((friendId) => (
-            <FriendItem
-              key={friendId}
-              friendId={friendId}
-              currentUser={user}
-              openChat={setCurrentChatFriend}
-              blockUser={blockUser}
-              unblockUser={unblockUser}
-              blockedUsers={blockedUsers}
-            />
-          ))}
-        </div>
-
-        {/* Add Friend */}
-        <AddFriend sendFriendRequest={sendFriendRequest} />
-        
-        {error && <p style={{ color: "red", marginTop: 10 }}>{error}</p>}
+        {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
 
-      {/* Main Chat Area */}
+      {/* Chat Area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* Chat Header */}
-        <div style={{ padding: 10, borderBottom: "1px solid #ccc", backgroundColor: "#f5f5f5" }}>
-          {currentChatFriend ? (
-            <ChatFriendHeader friendId={currentChatFriend.uid} onlineUsers={onlineUsers} />
-          ) : (
-            <p>Select a friend to chat</p>
-          )}
-        </div>
-
-        {/* Chat Messages */}
-        <div style={{ flex: 1, padding: 10, overflowY: "auto", backgroundColor: "#eee" }}>
-          {messages.map((msg) => (
-            <MessageItem key={msg.id} message={msg} currentUser={user.uid} />
-          ))}
-          {currentChatFriend && typingStatus[currentChatFriend.uid] && (
-            <p><em>Typing...</em></p>
-          )}
-        </div>
-
-        {/* Chat Input */}
-        {currentChatFriend && (
-          <div style={{ padding: 10, borderTop: "1px solid #ccc", backgroundColor: "#f5f5f5" }}>
-            <input
-              type="text"
-              value={newMessage}
-              onChange={handleTyping}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Type a message..."
-              style={{ width: "80%", marginRight: 10 }}
-            />
-            <button onClick={sendMessage}>Send</button>
-          </div>
+        {currentChatFriend ? (
+          <ChatWindow
+            currentUser={user}
+            friendId={currentChatFriend.uid}
+            messages={messages}
+            onSend={sendMessage}
+            newMessage={newMessage}
+            onTyping={handleTyping}
+            onDeleteMessage={deleteMessage}
+            profilePhotoURL={profilePhotoURL}
+            db={db}
+            onlineUsers={onlineUsers}
+          />
+        ) : (
+          <div style={{ padding: 20 }}>Select a friend to chat</div>
         )}
       </div>
     </div>
   );
 }
 
-// Friend item component
-function FriendItem({ friendId, currentUser, openChat, blockUser, unblockUser, blockedUsers }) {
-  const [username, setUsername] = useState("");
-  const [profilePhoto, setProfilePhoto] = useState(null);
+// ----------- Components -----------
+
+function FriendRequestItem({ request, onAccept, onBlock }) {
+  const [fromUserData, setFromUserData] = useState(null);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const userDoc = await getDoc(doc(db, "users", friendId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUsername(data.username || friendId);
-          setProfilePhoto(data.profilePhotoURL || null);
-        }
-      } catch (err) {
-        console.error(err);
+    async function fetchUser() {
+      const docSnap = await getDoc(doc(db, "users", request.from));
+      if (docSnap.exists()) {
+        setFromUserData(docSnap.data());
       }
     }
-    fetchData();
-  }, [friendId]);
+    fetchUser();
+  }, [request.from]);
 
-  const isBlocked = blockedUsers.includes(friendId);
+  if (!fromUserData) return null;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: 5, cursor: "pointer", opacity: isBlocked ? 0.5 : 1 }}>
-      <img
-        src={profilePhoto || "https://via.placeholder.com/40"}
-        alt={username}
-       
+    <div style={{ marginBottom: 5, borderBottom: "1px solid #ddd", paddingBottom: 5 }}>
+      <strong>{fromUserData.username || "Unknown"}</strong>
+      <button onClick={onAccept} style={{ marginLeft: 10 }}>
+        Accept
+      </button>
+      <button onClick={onBlock} style={{ marginLeft: 5, color: "red" }}>
+        Block
+      </button>
+    </div>
+  );
+}
+
+function FriendListItem({ friendId, currentUserId, onSelect, onBlock, blocked, onUnblock, db }) {
+  const [friendData, setFriendData] = useState(null);
+
+  useEffect(() => {
+    async function fetchFriend() {
+      const docSnap = await getDoc(doc(db, "users", friendId));
+      if (docSnap.exists()) {
+        setFriendData(docSnap.data());
+      }
+    }
+    fetchFriend();
+  }, [friendId, db]);
+
+  if (!friendData) return null;
+
