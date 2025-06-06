@@ -76,9 +76,14 @@ export default function App() {
   const [typingStatus, setTypingStatus] = useState({});
 
   // Profile photo
-  const [profilePhotoURL, setProfilePhotoURL] = useState(null);
+ /* const [profilePhotoURL, setProfilePhotoURL] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
-
+*/
+  const [user, setUser] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
   // Password change
   const [newPassword, setNewPassword] = useState("");
   const [reauthPassword, setReauthPassword] = useState("");
@@ -91,6 +96,15 @@ export default function App() {
   const [currentGroup, setCurrentGroup] = useState(null);
   const [groupMessages, setGroupMessages] = useState([]);
   const [newGroupMessage, setNewGroupMessage] = useState("");
+
+  // Handle file selection and preview
+  function handlePhotoChange(e) {
+    const file = e.target.files[0];
+    if (file) {
+      setPhotoFile(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  }
 
   // ----------- Auth Listener -----------
   useEffect(() => {
@@ -175,42 +189,36 @@ export default function App() {
       setError(err.message);
     }
   } */
+  // Upload photo and save URL to Firestore
+  async function handleUpload() {
+    setError("");
+    if (!photoFile) {
+      setError("Please select a photo first.");
+      return;
+    }
+    if (!user) {
+      setError("No user logged in.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
+      await uploadBytes(photoRef, photoFile);
+      const url = await getDownloadURL(photoRef);
+
+      // Update Firestore user document (creates if not exist)
+      await updateDoc(doc(db, "users", user.uid), { profilePhotoURL: url });
+
+      alert("Profile photo uploaded successfully!");
+      setPhotoFile(null);
+      setPreview(null);
+    } catch (err) {
+      setError("Upload failed: " + err.message);
+    }
+    setUploading(false);
+  }
+
   
-async function handlePhotoUpload() {
-  if (!photoFile || !user) {
-    console.warn("Missing file or user");
-    return;
-  }
-
-  try {
-    // Create a reference path based on UID
-    const photoRef = ref(storage, `profilePhotos/${user.uid}/${photoFile.name}`);
-
-    // Upload the photo to Firebase Storage
-    await uploadBytes(photoRef, photoFile);
-
-    // Get the public download URL
-    const url = await getDownloadURL(photoRef);
-
-    // Update React state
-    setProfilePhotoURL(url);
-
-    // Update Firestore user document
-    await updateDoc(doc(db, "users", user.uid), {
-      profilePhotoURL: url,
-      photoUpdatedAt: serverTimestamp(), // optional field
-      status: "online", // update status if needed
-    });
-
-    // Optional: Show success message
-    toast.success("Profile photo updated!");
-
-  } catch (err) {
-    console.error("Photo upload error:", err);
-    setError(err.message);
-    toast.error("Failed to upload photo.");
-  }
-}
   // ----------- Friend Requests System -----------
 
   // Send friend request by username
@@ -545,6 +553,41 @@ async function handlePhotoUpload() {
         {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
     );
+//-----------profile photo-----------
+
+  return (
+    <div className="max-w-md mx-auto mt-8 p-4 border rounded shadow bg-white dark:bg-gray-900">
+      <h2 className="text-xl font-bold mb-4 text-center">Upload Profile Photo</h2>
+
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoChange}
+        className="mb-4 w-full"
+      />
+
+      {preview && (
+        <div className="mb-4">
+          <img
+            src={preview}
+            alt="Preview"
+            className="w-32 h-32 object-cover rounded-full mx-auto border"
+          />
+        </div>
+      )}
+
+      <button
+        onClick={handleUpload}
+        disabled={uploading || !photoFile}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded disabled:opacity-50"
+      >
+        {uploading ? "Uploading..." : "Upload Photo"}
+      </button>
+    </div>
+  );
+}
+
+export default ProfileUploader;
 
   // If logged in show main UI
   return (
