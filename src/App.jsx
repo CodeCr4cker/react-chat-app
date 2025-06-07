@@ -1062,6 +1062,7 @@ export default function App() {
               <div style={{fontSize: '48px', marginBottom: '20px'}}>💬</div>
               <h2>Start Chatting</h2>
               <p>Choose a friend from the sidebar to begin your conversation</p>
+              <p>This app is created by</p> <h1 color="red"> Mr Divyanshu Pandey </h1>
             </div>
           )}
         </div>
