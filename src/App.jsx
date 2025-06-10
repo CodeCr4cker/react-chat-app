@@ -1278,7 +1278,7 @@ export default function App() {
                 <div style={{ fontSize: '48px', marginBottom: '20px' }}>💬</div>
                 <h2>Start Chatting</h2>
                 <p>Choose a friend from the sidebar to begin your conversation</p>
-                <p>This App is Designed By Mr Divyanshu Pandey </p>
+                
               </div>
             )}
           </div>
@@ -1759,7 +1759,7 @@ export default function App() {
               <p style={{ color: theme === "dark" ? "#eee" : "#23272f" }}>
                 Hi! I'm <strong>Divyanshu Pandey</strong>, passionate about building privacy-first, modern and user-friendly web apps. <br /><br />
                 This chat app was built with ❤️ using React and Firebase. <br /><br />
-                <a href="https://github.com/CodeCr4cker" target="_blank" rel="noopener noreferrer" style={{ color: "#219653" }}>GitHub: @CodeCr4cker</a>
+                
               </p>
               <button
                 onClick={() => setShowAboutUs(false)}
