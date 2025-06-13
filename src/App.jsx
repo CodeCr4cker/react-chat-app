@@ -1,11 +1,3 @@
-// This is a fully integrated App.jsx file for your chat app with the following features:
-// - Global dark/light theme toggle (applies to the whole app, not just per chat)
-// - Real-time chatting (Firestore)
-// - Image sending (Firebase Storage)
-// - Per-chat wallpaper (set/remove via the three-dot menu, persists in localStorage)
-// - Unfriend and clean chat (remove friend, clear chat history)
-// - All other basic functionalities (login, register, profile, requests, etc.)
-
 import React, { useState, useEffect, useRef } from "react";
 import {
   User, Send, Plus, Settings as SettingsIcon, LogOut, Moon, Sun, Image, Smile, Edit3, Trash2, Check, CheckCheck,
@@ -68,7 +60,7 @@ const Login = ({ onLogin, onShowRegister }) => {
     e.preventDefault();
     try {
       if (!username.trim()) throw new Error("Username required");
-      const email = `${username}@anonchat.app`;
+      const email = `${username}@Divyanshu.Pandey`;
       await signInWithEmailAndPassword(auth, email, password);
       onLogin();
     } catch (err) {
@@ -122,7 +114,7 @@ const Register = ({ onRegister }) => {
       const q = query(collection(db, "users"), where("username", "==", username));
       const docs = await getDocs(q);
       if (!docs.empty) throw new Error("Username already taken");
-      const email = `${username}@anonchat.app`;
+      const email = `${username}@Divyanshu.Pandey`;
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(user, { displayName: username });
       await addDoc(collection(db, "users"), { uid: user.uid, username, bio: "", photoURL: "" });
@@ -200,7 +192,7 @@ const AboutUs = ({ onClose }) => (
       </div>
       <h2 className="text-xl font-semibold text-center">About This App</h2>
       <p className="mt-4 text-center text-gray-700 dark:text-gray-300">
-        Developed by <b>Your Name</b>.<br />
+        Developed by Mr.<b>Divyanshu Pandey</b>.<br />
         Secure, privacy-first, modern chat with friend requests, blocking, and more!
       </p>
     </div>
