@@ -101,6 +101,7 @@ const Login = ({ onLogin, onShowRegister }) => {
   );
 };
 
+// Register component with lowercase username enforced
 const Register = ({ onRegister }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -111,6 +112,7 @@ const Register = ({ onRegister }) => {
     e.preventDefault();
     try {
       if (!username.trim()) throw new Error("Username required");
+      if (username !== username.toLowerCase()) throw new Error("Username must be in lowercase.");
       const q = query(collection(db, "users"), where("username", "==", username));
       const docs = await getDocs(q);
       if (!docs.empty) throw new Error("Username already taken");
@@ -132,7 +134,7 @@ const Register = ({ onRegister }) => {
       {success && <div className="text-green-600 mb-2">Account created! Redirecting...</div>}
       <input
         className="w-full mb-4 px-3 py-2 border rounded"
-        placeholder="Unique Username"
+        placeholder="Unique Username (lowercase)"
         value={username}
         onChange={e => setUsername(e.target.value.replace(/\s/g, ""))}
         required
@@ -153,7 +155,9 @@ const Register = ({ onRegister }) => {
         Register
       </button>
       <div className="text-center mt-4">
-        <span className="text-gray-500">Already have an account? <button className="text-blue-500" type="button" onClick={onRegister}>Log in.</button></span>
+        <span className="text-gray-500">
+          Already have an account? <button className="text-blue-500" type="button" onClick={onRegister}>Log in.</button>
+        </span>
       </div>
     </form>
   );
@@ -183,13 +187,16 @@ const Sidebar = ({
   </div>
 );
 
+// About Us: shows developer photo and username at the top
 const AboutUs = ({ onClose }) => (
   <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
     <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full relative">
       <button className="absolute top-2 right-2" onClick={onClose}>✖</button>
-      <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
-        <User size={48} className="text-blue-700" />
+      <div className="w-24 h-24 rounded-full mx-auto mb-2 bg-blue-100 flex items-center justify-center overflow-hidden">
+        {/* Developer's photo */}
+        <img src="https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg" alt="D.P" className="w-24 h-24 rounded-full object-cover"/>
       </div>
+      <h3 className="text-center font-semibold text-lg mb-1">Divyanshu-Pandey</h3>
       <h2 className="text-xl font-semibold text-center">About This App</h2>
       <p className="mt-4 text-center text-gray-700 dark:text-gray-300">
         Developed by Mr.<b>Divyanshu Pandey</b>.<br />
@@ -764,7 +771,7 @@ const ChatWindow = ({
       {showWallpaperModal &&
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Choose a Wallpaper</h3>
+            <h3 className="text-lg font-semibold mb-4">Set a Wallpaper</h3>
             <div className="grid grid-cols-3 gap-4">
               {[
                 "https://wallpapercave.com/wp/wp2757874.jpg",
