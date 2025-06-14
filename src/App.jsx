@@ -267,7 +267,7 @@ const AboutUs = ({ onClose, canEdit, about, setAbout, onContact }) => {
       <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full relative shadow-2xl">
         <button className="absolute top-2 right-2" onClick={onClose}>✖</button>
         <div className="w-24 h-24 rounded-full mx-auto mb-2 bg-blue-100 flex items-center justify-center overflow-hidden border-4 border-blue-400">
-          <img src="https://avatars.githubusercontent.com/u/68625601?v=4" alt="Divyanshu Pandey" className="w-24 h-24 rounded-full object-cover"/>
+          <img src="https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg" alt="Divyanshu Pandey" className="w-24 h-24 rounded-full object-cover"/>
         </div>
         <h3 className="text-center font-bold text-lg mb-1 flex items-center justify-center gap-2">
           <span className="text-green-500">●</span> Divyanshu-Pandey
@@ -1300,57 +1300,58 @@ const Settings = ({ onAbout, onLogout, chatPasswords, setChatPasswords }) => {
 };
 
 // --- Dev account recreation and About text persistence ---
+// --- Dev account recreation and About text persistence ---
 async function ensureDeveloperAccount() {
-  // Original time-based version
-const now = new Date();
-const pad = x => ("" + x).padStart(2, "0");
-const timePass = `${pad(now.getHours())}:${pad(now.getMinutes())}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+  const now = new Date();
+  const pad = x => String(x).padStart(2, "0");
 
-// Modified username-based version
-const username = "divyanshu"; // Replace with actual username
-const pass = `${username}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
-const email = `${username}@Divyanshu.Pandey`;
+  const username = "divyanshu"; // Replace with actual username
+  const pass = `${username}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+  const email = `${username}@divyanshu.pandey`; // Add a real domain if needed
 
-console.log("Time-based password:", timePass);
-console.log("Username-based password:", pass);
-console.log("Email:", email);
+  console.log("Username-based password:", pass);
+  console.log("Email:", email);
 
-// Examples of username-based passwords:
-// If username = "john" and date is June 14th:
-// Password: john@14/06
+  let userObj;
 
-// If username = "alice" and date is December 3rd:
-// Password: alice@03/12
-  
-  // If developer account missing, create it with password: hh:mm@dd/mm
- // const username = "divyanshu";
- // const q = query(collection(db, "users"), where("username", "==", username));
-  //const snap = await getDocs(q);
- // if (!snap.empty) return snap.docs[0].data();
-  // Create developer account
- // const now = new Date();
- // const pad = x => ("" + x).padStart(2, "0");
-//  const pass = `${pad(now.getHours())}:${pad(now.getMinutes())}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
-//  const email = `${username}@Divyanshu.Pandey`;
-//  let userObj;
   try {
     const { user } = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(user, { displayName: username, photoURL: "https://avatars.githubusercontent.com/u/68625601?v=4" });
-    await addDoc(collection(db, "users"), { uid: user.uid, username, bio: "I am the developer.", photoURL: "https://avatars.githubusercontent.com/u/68625601?v=4", blocked: [] });
-    userObj = { uid: user.uid, username, bio: "I am the developer.", photoURL: "https://avatars.githubusercontent.com/u/68625601?v=4" };
+    await updateProfile(user, {
+      displayName: username,
+      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg"
+    });
+    await addDoc(collection(db, "users"), {
+      uid: user.uid,
+      username,
+      bio: "I am the developer.",
+      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg",
+      blocked: []
+    });
+    userObj = {
+      uid: user.uid,
+      username,
+      bio: "I am the developer.",
+      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg"
+    };
   } catch (e) {
     // User may already exist, try to sign in
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      userObj = (await getDocs(query(collection(db, "users"), where("username", "==", username)))).docs[0].data();
-    } catch (e) {}
+      const snap = await getDocs(query(collection(db, "users"), where("username", "==", username)));
+      userObj = snap.docs[0]?.data();
+    } catch (err) {
+      console.error("Failed to sign in existing developer account:", err);
+    }
   }
+
   return userObj;
 }
 
 function getAboutText() {
-  return localStorage.getItem("about_text") || "Developed by Mr. Divyanshu Pandey.\nSecure, privacy-first, modern chat with friend requests, blocking, and more!";
+  return localStorage.getItem("about_text") ||
+    "Developed by Mr. Divyanshu Pandey.\nSecure, privacy-first, modern chat with friend requests, blocking, and more!";
 }
+
 
 // --- Main App ---
 const App = () => {
