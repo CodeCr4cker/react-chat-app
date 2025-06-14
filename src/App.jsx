@@ -1315,20 +1315,20 @@ async function ensureDeveloperAccount() {
     const { user } = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(user, {
       displayName: username,
-      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg"
+      photoURL: "https://raw.githubusercontent.com/CodeCr4cker/Required-Document/main/about/about.jpg"
     });
     await addDoc(collection(db, "users"), {
       uid: user.uid,
       username,
       bio: "I am the developer.",
-      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg",
+      photoURL: "https://raw.githubusercontent.com/CodeCr4cker/Required-Document/main/about/about.jpg",
       blocked: []
     });
     userObj = {
       uid: user.uid,
       username,
       bio: "I am the developer.",
-      photoURL: "https://github.com/CodeCr4cker/Required-Document/blob/main/about/about.jpg"
+      photoURL: "https://raw.githubusercontent.com/CodeCr4cker/Required-Document/main/about/about.jpg"
     };
   } catch (e) {
     // User may already exist, try to sign in
