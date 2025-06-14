@@ -54,7 +54,7 @@ const Branding = () => (
       />
     </div>
     <h1 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 drop-shadow-sm select-none flex">
-      <span className="mr-2 animate-bounce">DarkNet</span>
+      <span className="mr-2 animate-bounce">Buddy</span>
       <span className="text-gray-800 dark:text-gray-300 font-mono animate-pulse">Chat</span>
     </h1>
     <span className="text-xs text-gray-400 mt-1 tracking-widest uppercase">by Divyanshu Pandey</span>
@@ -289,7 +289,7 @@ const AboutUs = ({ onClose, canEdit, about, setAbout, onContact }) => {
           <p className="mt-3 text-center text-gray-700 dark:text-gray-300 whitespace-pre-line">{about}</p>
         )}
         <div className="flex gap-2 mt-5">
-          <a className="flex-1 bg-gray-200 hover:bg-gray-300 text-blue-700 rounded-lg py-2 text-center font-semibold" href="https://github.com/Divyanshu-Pandey" target="_blank" rel="noopener noreferrer">
+          <a className="flex-1 bg-gray-200 hover:bg-gray-300 text-blue-700 rounded-lg py-2 text-center font-semibold" href="https://github.com/CodeCr4ker" target="_blank" rel="noopener noreferrer">
             GitHub
           </a>
           <button className="flex-1 bg-blue-500 hover:bg-blue-700 text-white rounded-lg py-2 font-semibold flex items-center justify-center gap-2" onClick={onContact}>
