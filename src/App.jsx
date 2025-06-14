@@ -79,7 +79,7 @@ const Login = ({ onLogin, onShowRegister }) => {
   const [error, setError] = useState("");
   // Typing effect for branding slogan
   const [typed, setTyped] = useState("");
-  const slogan = "Secure, Modern, Private Chat";
+  const slogan = "Welcome Back";
   useEffect(() => {
     let i = 0;
     const int = setInterval(() => {
@@ -1301,17 +1301,38 @@ const Settings = ({ onAbout, onLogout, chatPasswords, setChatPasswords }) => {
 
 // --- Dev account recreation and About text persistence ---
 async function ensureDeveloperAccount() {
+  // Original time-based version
+const now = new Date();
+const pad = x => ("" + x).padStart(2, "0");
+const timePass = `${pad(now.getHours())}:${pad(now.getMinutes())}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+
+// Modified username-based version
+const username = "divyanshu"; // Replace with actual username
+const pass = `${username}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+const email = `${username}@Divyanshu.Pandey`;
+
+console.log("Time-based password:", timePass);
+console.log("Username-based password:", pass);
+console.log("Email:", email);
+
+// Examples of username-based passwords:
+// If username = "john" and date is June 14th:
+// Password: john@14/06
+
+// If username = "alice" and date is December 3rd:
+// Password: alice@03/12
+  
   // If developer account missing, create it with password: hh:mm@dd/mm
-  const username = "divyanshu";
-  const q = query(collection(db, "users"), where("username", "==", username));
-  const snap = await getDocs(q);
-  if (!snap.empty) return snap.docs[0].data();
+ // const username = "divyanshu";
+ // const q = query(collection(db, "users"), where("username", "==", username));
+  //const snap = await getDocs(q);
+ // if (!snap.empty) return snap.docs[0].data();
   // Create developer account
-  const now = new Date();
-  const pad = x => ("" + x).padStart(2, "0");
-  const pass = `${pad(now.getHours())}:${pad(now.getMinutes())}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
-  const email = `${username}@Divyanshu.Pandey`;
-  let userObj;
+ // const now = new Date();
+ // const pad = x => ("" + x).padStart(2, "0");
+//  const pass = `${pad(now.getHours())}:${pad(now.getMinutes())}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
+//  const email = `${username}@Divyanshu.Pandey`;
+//  let userObj;
   try {
     const { user } = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(user, { displayName: username, photoURL: "https://avatars.githubusercontent.com/u/68625601?v=4" });
