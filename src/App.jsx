@@ -258,7 +258,7 @@ const Sidebar = ({
 );
 
 // --- About Us (editable by dev) ---
-const AboutUs = ({ onClose, canEdit, about, setAbout, onContact }) => {
+const AboutUs = ({ onClose, canEdit, about, setAbout, onContact, devAccount }) => {
   const [edit, setEdit] = useState(false);
   const [localAbout, setLocalAbout] = useState(about || "");
   useEffect(() => { setLocalAbout(about); }, [about]);
@@ -292,7 +292,7 @@ const AboutUs = ({ onClose, canEdit, about, setAbout, onContact }) => {
           <a className="flex-1 bg-gray-200 hover:bg-gray-300 text-blue-700 rounded-lg py-2 text-center font-semibold" href="https://github.com/CodeCr4ker" target="_blank" rel="noopener noreferrer">
             GitHub
           </a>
-          <button className="flex-1 bg-blue-500 hover:bg-blue-700 text-white rounded-lg py-2 font-semibold flex items-center justify-center gap-2" onClick={onContact}>
+          <button className="flex-1 bg-blue-500 hover:bg-blue-700 text-white rounded-lg py-2 font-semibold flex items-center justify-center gap-2" onClick={onContact} disabled={!devAccount}>
             <Mail size={18} /> Contact Us
           </button>
         </div>
@@ -440,6 +440,10 @@ const ChatListModal = ({ open, onClose, ...props }) => {
     </div>
   );
 };
+
+
+
+
 
 // --- Chat List (with developer highlight) ---
 const ChatList = ({ currentUser, onSelectChat, activeChat }) => {
@@ -1300,20 +1304,13 @@ const Settings = ({ onAbout, onLogout, chatPasswords, setChatPasswords }) => {
 };
 
 // --- Dev account recreation and About text persistence ---
-// --- Dev account recreation and About text persistence ---
 async function ensureDeveloperAccount() {
   const now = new Date();
   const pad = x => String(x).padStart(2, "0");
-
-  const username = "divyanshu"; // Replace with actual username
+  const username = "divyanshu";
   const pass = `${username}@${pad(now.getDate())}/${pad(now.getMonth() + 1)}`;
-  const email = `${username}@divyanshu.pandey`; // Add a real domain if needed
-
-  console.log("Username-based password:", pass);
-  console.log("Email:", email);
-
+  const email = `${username}@divyanshu.pandey`;
   let userObj;
-
   try {
     const { user } = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(user, {
@@ -1336,21 +1333,20 @@ async function ensureDeveloperAccount() {
   } catch (e) {
     // User may already exist, try to sign in
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const { user } = await signInWithEmailAndPassword(auth, email, pass);
       const snap = await getDocs(query(collection(db, "users"), where("username", "==", username)));
       userObj = snap.docs[0]?.data();
     } catch (err) {
       console.error("Failed to sign in existing developer account:", err);
     }
   }
-
   return userObj;
 }
-
 function getAboutText() {
   return localStorage.getItem("about_text") ||
     "Developed by Mr. Divyanshu Pandey.\nSecure, privacy-first, modern chat with friend requests, blocking, and more!";
 }
+
 
 
 // --- Main App ---
@@ -1375,14 +1371,10 @@ const App = () => {
     catch { return {}; }
   });
 
-  // About text persists
-  useEffect(() => {
-    localStorage.setItem("about_text", aboutText);
-  }, [aboutText]);
+// About text persists
+  useEffect(() => { localStorage.setItem("about_text", aboutText); }, [aboutText]);
   // Dev account always exists
-  useEffect(() => {
-    ensureDeveloperAccount().then(setDevAccount);
-  }, []);
+  useEffect(() => { ensureDeveloperAccount().then(setDevAccount); }, []);
   // Loading, theme, wall, passwords
   useEffect(() => {
     setTimeout(() => setLoading(false), 1000);
@@ -1406,17 +1398,22 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem("chat_passwords", JSON.stringify(chatPasswords));
   }, [chatPasswords]);
+
   // Contact Us handler (send friend request to dev)
   const handleContactUs = async () => {
     if (!firebaseUser || !devAccount) return;
-    // Check if request already exists
+    // Check both directions for request
     const q = query(collection(db, "friendRequests"),
-      where("from", "==", firebaseUser.uid),
-      where("to", "==", devAccount.uid)
+      where("participants", "array-contains", firebaseUser.uid)
     );
     const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("Friend request to developer already sent!");
+    if (snap.docs.some(doc => {
+      const data = doc.data();
+      return Array.isArray(data.participants) &&
+        data.participants.includes(firebaseUser.uid) &&
+        data.participants.includes(devAccount.uid);
+    })) {
+      alert("Friend request to developer already sent or already friends!");
       return;
     }
     await addDoc(collection(db, "friendRequests"), {
@@ -1521,6 +1518,7 @@ const App = () => {
           about={aboutText}
           setAbout={setAboutText}
           onContact={handleContactUs}
+          devAccount={devAccount}
         />
       )}
       {showBlocked && <BlockedUsers currentUser={firebaseUser} onClose={() => setShowBlocked(false)} />}
@@ -1534,5 +1532,4 @@ const App = () => {
     </div>
   );
 };
-
 export default App;
