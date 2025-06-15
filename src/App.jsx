@@ -29,7 +29,7 @@ const storage = getStorage(app);
 
 // --- Responsive CSS injection ---
 const responsiveCss = `
-@media (max-width: 766px) {
+@media (max-width: 769px) {
   .sidebar { width: 100vw !important; flex-direction: row !important; height: 56px !important; position: fixed; top: 0; left: 0; z-index: 40;}
   .sidebar .sidebar-profile { margin-bottom: 0 !important;}
   .sidebar .sidebar-icons {flex-direction: row !important;}
@@ -38,7 +38,7 @@ const responsiveCss = `
   .chat-list {display: block !important;} /* Changed from none to block for mobile */
   .sidebar .sidebar-chats {display: block !important;}
 }
-@media (min-width: 767px) {
+@media (min-width: 768px) {
   .sidebar .sidebar-chats { display: none !important; }
   .chat-list {display: block !important;} /* Always visible on desktop */
 }
