@@ -50,7 +50,7 @@ const Branding = ({ logoURL }) => (
   <div className="flex flex-col items-center mb-6 animate-fade-in">
     <div className="w-20 h-20 rounded-full bg-blue-500 flex items-center justify-center shadow-lg mb-2">
       <img
-        src={logoURL || "https://avatars.githubusercontent.com/u/68625601?v=4"}
+        src={logoURL || "https://raw.githubusercontent.com/CodeCr4cker/Required-Document/main/about/logo.jpg"}
         alt="Divyanshu Pandey"
         className="w-20 h-20 rounded-full object-cover border-4 border-blue-100 shadow"
       />
@@ -351,7 +351,7 @@ const AboutUs = ({ onClose, canEdit, devAccount, onContact }) => {
         <h3 className="text-center font-bold text-lg mb-1 flex items-center justify-center gap-2">
           <span className="text-green-500">●</span> Divyanshu-Pandey
         </h3>
-        <h2 className="text-xl font-semibold text-center mb-2">About This App</h2>
+        <h2 className="text-xl font-semibold text-center mb-2"></h2>
         {edit ? (
           <>
             <textarea
@@ -1663,7 +1663,7 @@ const UserProfile = ({ user }) => {
           >
             <option value="info">Info</option>
             <option value="warning">Warning</option>
-            <option value="celebration">Celebration</option>
+            <option value="celebration">Request</option>
             <option value="congratulation">Congratulation</option>
           </select>
           <input
