@@ -7,13 +7,13 @@ import { getDatabase } from "firebase/database";
 
 // Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBFBtuIw0HVJl-HYZ9DSP1VZqwXMJli_W8",
-  authDomain: "darknet-chat-f6b5a.firebaseapp.com",
-  projectId: "darknet-chat-f6b5a",
-  storageBucket: "darknet-chat-f6b5a.appspot.com",
-  messagingSenderId: "485072993943",
-  appId: "1:485072993943:web:262edab82d07a87b4733d2",
-  measurementId: "G-2WL2PC8N6H",
+  apiKey: "AIzaSyD5ndtL_f3JZk6NTOMX1DlIGqO6roZWIkQ",
+  authDomain: "buddy-chat-ced44.firebaseapp.com",
+  projectId: "buddy-chat-ced44",
+  storageBucket: "buddy-chat-ced44.firebasestorage.app",
+  messagingSenderId: "623200679884",
+  appId: "1:623200679884:web:26c1c05ae0439f3709cf69",
+  measurementId: "G-1TX2VDCD4F"
 };
 
 // Initialize Firebase
